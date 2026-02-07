@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Medical Photo Organizer</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+    }
+    .scrollbar-hide::-webkit-scrollbar {
+      display: none;
+    }
+    .scrollbar-hide {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+    #root {
+      width: 100%;
+      height: 100vh;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    // Lucide React Icons (inline SVG components)
+    const Search = ({ className }) => (
+      <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <circle cx="11" cy="11" r="8"></circle>
+        <path d="m21 21-4.35-4.35"></path>
+      </svg>
+    );
+
+    const X = ({ className }) => (
+      <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path d="M18 6 6 18M6 6l12 12"></path>
+      </svg>
+    );
+
+    const Camera = ({ className }) => (
+      <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+        <circle cx="12" cy="13" r="4"></circle>
+      </svg>
+    );
+
+    const Grid3x3 = ({ className }) => (
+      <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <rect width="7" height="7" x="3" y="3" rx="1"></rect>
+        <rect width="7" height="7" x="14" y="3" rx="1"></rect>
+        <rect width="7" height="7" x="14" y="14" rx="1"></rect>
+        <rect width="7" height="7" x="3" y="14" rx="1"></rect>
+      </svg>
+    );
+
+    const ChevronLeft = ({ className }) => (
+      <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path d="m15 18-6-6 6-6"></path>
+      </svg>
+    );
+
+    const Plus = ({ className }) => (
+      <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path d="M5 12h14M12 5v14"></path>
+      </svg>
+    );
+
+    const Trash2 = ({ className }) => (
+      <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+        <line x1="10" x2="10" y1="11" y2="17"></line>
+        <line x1="14" x2="14" y1="11" y2="17"></line>
+      </svg>
+    );
+
+    const MedicalPhotoOrganizer = () => {
+      const [photos, setPhotos] = useState([]);
+      const [searchQuery, setSearchQuery] = useState('');
+      const [selectedCategory, setSelectedCategory] = useState('all');
+      const [selectedPhoto, setSelectedPhoto] = useState(null);
+      const [showCameraView, setShowCameraView] = useState(false);
+      const [showDetailsForm, setShowDetailsForm] = useState(false);
+      const [currentView, setCurrentView] = useState('grid');
+      const [capturedImage, setCapturedImage] = useState(null);
+      const [newPhoto, setNewPhoto] = useState({
+        patientId: '',
+        patientName: '',
+        category: '',
+        tags: [],
+        notes: '',
+        date: new Date().toISOString().split('T')[0],
+        imageUrl: ''
+      });
+      const [tagInput, setTagInput] = useState('');
+      const cameraInputRef = useRef(null);
+
+      const categories = [
+        { id: 'all', name: 'All Photos', color: 'bg-gray-500' },
+        { id: 'dermatology', name: 'Dermatology', color: 'bg-pink-500' },
+        { id: 'wounds', name: 'Wounds', color: 'bg-red-500' },
+        { id: 'xray', name: 'X-Ray', color: 'bg-blue-500' },
+        { id: 'surgical', name: 'Surgical', color: 'bg-purple-500' },
+        { id: 'dental', name: 'Dental', color: 'bg-green-500' },
+        { id: 'ophthalmology', name: 'Ophthalmology', color: 'bg-cyan-500' },
+        { id: 'other', name: 'Other', color: 'bg-gray-600' }
+      ];
+
+      // Load photos from localStorage on mount
+      useEffect(() => {
+        const savedPhotos = localStorage.getItem('medical-photos');
+        if (savedPhotos) {
+          try {
+            setPhotos(JSON.parse(savedPhotos));
+          } catch (error) {
+            console.log('Error loading photos');
+          }
+        }
+      }, []);
+
+      // Save photos to localStorage whenever they change
+      useEffect(() => {
+        if (photos.length > 0) {
+          localStorage.setItem('medical-photos', JSON.stringify(photos));
+        }
+      }, [photos]);
+
+      const handleCameraCapture = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            setCapturedImage(reader.result);
+            setNewPhoto({ ...newPhoto, imageUrl: reader.result });
+            setShowCameraView(false);
+            setShowDetailsForm(true);
+          };
+          reader.readAsDataURL(file);
+        }
+      };
+
+      const openCamera = () => {
+        setShowCameraView(true);
+        setTimeout(() => {
+          if (cameraInputRef.current) {
+            cameraInputRef.current.click();
+          }
+        }, 100);
+      };
+
+      const retakePhoto = () => {
+        setCapturedImage(null);
+        setNewPhoto({ ...newPhoto, imageUrl: '' });
+        setShowDetailsForm(false);
+        openCamera();
+      };
+
+      const addTag = () => {
+        if (tagInput.trim() && !newPhoto.tags.includes(tagInput.trim())) {
+          setNewPhoto({
+            ...newPhoto,
+            tags: [...newPhoto.tags, tagInput.trim().toLowerCase()]
+          });
+          setTagInput('');
+        }
+      };
+
+      const removeTag = (tagToRemove) => {
+        setNewPhoto({
+          ...newPhoto,
+          tags: newPhoto.tags.filter(tag => tag !== tagToRemove)
+        });
+      };
+
+      const savePhoto = () => {
+        if (newPhoto.imageUrl && newPhoto.patientId && newPhoto.category) {
+          const photoToSave = {
+            ...newPhoto,
+            id: Date.now(),
+            uploadDate: new Date().toISOString()
+          };
+          setPhotos([photoToSave, ...photos]);
+          setShowDetailsForm(false);
+          setCapturedImage(null);
+          setNewPhoto({
+            patientId: '',
+            patientName: '',
+            category: '',
+            tags: [],
+            notes: '',
+            date: new Date().toISOString().split('T')[0],
+            imageUrl: ''
+          });
+        }
+      };
+
+      const deletePhoto = (photoId) => {
+        setPhotos(photos.filter(p => p.id !== photoId));
+        setSelectedPhoto(null);
+        localStorage.setItem('medical-photos', JSON.stringify(photos.filter(p => p.id !== photoId)));
+      };
+
+      const filteredPhotos = photos.filter(photo => {
+        const matchesCategory = selectedCategory === 'all' || photo.category === selectedCategory;
+        const matchesSearch = searchQuery === '' || 
+          photo.patientId.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          photo.patientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          photo.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase())) ||
+          photo.notes.toLowerCase().includes(searchQuery.toLowerCase());
+        return matchesCategory && matchesSearch;
+      });
+
+      const getCategoryInfo = (categoryId) => {
+        return categories.find(cat => cat.id === categoryId) || categories[categories.length - 1];
+      };
+
+      return (
+        <div className="h-screen bg-black overflow-hidden flex flex-col">
+          {/* iPhone Status Bar */}
+          <div className="bg-black text-white px-6 pt-3 pb-2 flex items-center justify-between text-xs">
+            <span>9:41</span>
+            <div className="flex items-center gap-1">
+              <div className="w-4 h-3 border border-white rounded-sm"></div>
+              <div className="w-1 h-1.5 bg-white rounded-full"></div>
+            </div>
+          </div>
+
+          {/* Camera View */}
+          {showCameraView && (
+            <div className="fixed inset-0 bg-black z-50 flex flex-col">
+              <div className="flex-1 flex items-center justify-center">
+                <Camera className="w-20 h-20 text-white opacity-50" />
+                <p className="absolute text-white mt-32">Click to select a photo</p>
+              </div>
+              <input
+                ref={cameraInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleCameraCapture}
+                className="hidden"
+              />
+              <div className="p-6">
+                <button
+                  onClick={() => setShowCameraView(false)}
+                  className="w-full bg-white text-black py-4 rounded-full font-semibold text-lg"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Details Form */}
+          {showDetailsForm && (
+            <div className="fixed inset-0 bg-white z-50 flex flex-col">
+              {/* Header */}
+              <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
+                <button
+                  onClick={() => {
+                    setShowDetailsForm(false);
+                    setCapturedImage(null);
+                    setNewPhoto({ ...newPhoto, imageUrl: '' });
+                  }}
+                  className="text-blue-500 text-lg"
+                >
+                  Cancel
+                </button>
+                <h1 className="text-lg font-semibold">Add Details</h1>
+                <button
+                  onClick={savePhoto}
+                  disabled={!newPhoto.imageUrl || !newPhoto.patientId || !newPhoto.category}
+                  className="text-blue-500 text-lg font-semibold disabled:text-gray-400"
+                >
+                  Save
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto">
+                {/* Photo Preview */}
+                <div className="relative aspect-square bg-gray-100">
+                  <img
+                    src={newPhoto.imageUrl}
+                    alt="Captured"
+                    className="w-full h-full object-cover"
+                  />
+                  <button
+                    onClick={retakePhoto}
+                    className="absolute bottom-4 right-4 bg-black bg-opacity-70 text-white px-4 py-2 rounded-full text-sm font-medium"
+                  >
+                    Retake
+                  </button>
+                </div>
+
+                {/* Form */}
+                <div className="p-4 space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-1">Patient ID *</label>
+                    <input
+                      type="text"
+                      value={newPhoto.patientId}
+                      onChange={(e) => setNewPhoto({ ...newPhoto, patientId: e.target.value })}
+                      className="w-full px-4 py-3 bg-gray-100 rounded-lg text-lg"
+                      placeholder="e.g., P12345"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-1">Patient Name</label>
+                    <input
+                      type="text"
+                      value={newPhoto.patientName}
+                      onChange={(e) => setNewPhoto({ ...newPhoto, patientName: e.target.value })}
+                      className="w-full px-4 py-3 bg-gray-100 rounded-lg text-lg"
+                      placeholder="Optional"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-1">Category *</label>
+                    <select
+                      value={newPhoto.category}
+                      onChange={(e) => setNewPhoto({ ...newPhoto, category: e.target.value })}
+                      className="w-full px-4 py-3 bg-gray-100 rounded-lg text-lg"
+                    >
+                      <option value="">Select category</option>
+                      {categories.filter(c => c.id !== 'all').map(cat => (
+                        <option key={cat.id} value={cat.id}>{cat.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-1">Date</label>
+                    <input
+                      type="date"
+                      value={newPhoto.date}
+                      onChange={(e) => setNewPhoto({ ...newPhoto, date: e.target.value })}
+                      className="w-full px-4 py-3 bg-gray-100 rounded-lg text-lg"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-1">Tags</label>
+                    <div className="flex gap-2 mb-2">
+                      <input
+                        type="text"
+                        value={tagInput}
+                        onChange={(e) => setTagInput(e.target.value)}
+                        onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addTag())}
+                        className="flex-1 px-4 py-3 bg-gray-100 rounded-lg text-lg"
+                        placeholder="Add tag"
+                      />
+                      <button
+                        onClick={addTag}
+                        className="bg-blue-500 text-white px-4 rounded-lg"
+                      >
+                        <Plus className="w-5 h-5" />
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {newPhoto.tags.map(tag => (
+                        <span
+                          key={tag}
+                          className="bg-blue-100 text-blue-700 px-3 py-1.5 rounded-full text-sm flex items-center gap-2"
+                        >
+                          {tag}
+                          <button onClick={() => removeTag(tag)}>
+                            <X className="w-3 h-3" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-1">Notes</label>
+                    <textarea
+                      value={newPhoto.notes}
+                      onChange={(e) => setNewPhoto({ ...newPhoto, notes: e.target.value })}
+                      className="w-full px-4 py-3 bg-gray-100 rounded-lg text-lg"
+                      rows="4"
+                      placeholder="Clinical notes..."
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Photo Detail View */}
+          {selectedPhoto && (
+            <div className="fixed inset-0 bg-black z-40 flex flex-col">
+              {/* Header */}
+              <div className="bg-black text-white px-4 py-3 flex items-center justify-between">
+                <button
+                  onClick={() => setSelectedPhoto(null)}
+                  className="flex items-center gap-1"
+                >
+                  <ChevronLeft className="w-6 h-6" />
+                  <span>Back</span>
+                </button>
+                <button
+                  onClick={() => deletePhoto(selectedPhoto.id)}
+                  className="text-red-500"
+                >
+                  <Trash2 className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto bg-black">
+                {/* Photo */}
+                <div className="w-full bg-black flex items-center justify-center">
+                  <img
+                    src={selectedPhoto.imageUrl}
+                    alt={`Patient ${selectedPhoto.patientId}`}
+                    className="w-full object-contain"
+                  />
+                </div>
+
+                {/* Details */}
+                <div className="bg-white rounded-t-3xl p-6 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h2 className="text-2xl font-bold text-gray-800">{selectedPhoto.patientName || selectedPhoto.patientId}</h2>
+                      <p className="text-gray-500">{selectedPhoto.patientId}</p>
+                    </div>
+                    <div className={`${getCategoryInfo(selectedPhoto.category).color} text-white px-4 py-2 rounded-full text-sm font-semibold`}>
+                      {getCategoryInfo(selectedPhoto.category).name}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 py-4">
+                    <div>
+                      <p className="text-sm text-gray-500">Date</p>
+                      <p className="font-semibold">{new Date(selectedPhoto.date).toLocaleDateString()}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-500">Uploaded</p>
+                      <p className="font-semibold">{new Date(selectedPhoto.uploadDate).toLocaleDateString()}</p>
+                    </div>
+                  </div>
+
+                  {selectedPhoto.tags.length > 0 && (
+                    <div>
+                      <p className="text-sm text-gray-500 mb-2">Tags</p>
+                      <div className="flex flex-wrap gap-2">
+                        {selectedPhoto.tags.map(tag => (
+                          <span key={tag} className="bg-gray-100 text-gray-700 px-3 py-1.5 rounded-full text-sm">
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedPhoto.notes && (
+                    <div>
+                      <p className="text-sm text-gray-500 mb-2">Notes</p>
+                      <p className="text-gray-800 bg-gray-50 p-4 rounded-lg leading-relaxed">{selectedPhoto.notes}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Main View */}
+          {!showCameraView && !showDetailsForm && !selectedPhoto && (
+            <>
+              {/* Header */}
+              <div className="bg-white px-4 py-3">
+                <h1 className="text-3xl font-bold text-gray-800">Medical Photos</h1>
+                <p className="text-gray-500 text-sm">{photos.length} photo{photos.length !== 1 ? 's' : ''}</p>
+              </div>
+
+              {/* Search Bar */}
+              {currentView === 'search' && (
+                <div className="bg-white px-4 pb-3">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                    <input
+                      type="text"
+                      placeholder="Search patients, tags, notes..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full pl-10 pr-4 py-3 bg-gray-100 rounded-lg text-lg"
+                      autoFocus
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Category Filters */}
+              <div className="bg-white px-4 pb-3">
+                <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                  {categories.map(category => (
+                    <button
+                      key={category.id}
+                      onClick={() => setSelectedCategory(category.id)}
+                      className={`px-4 py-2 rounded-full whitespace-nowrap transition-all ${
+                        selectedCategory === category.id
+                          ? `${category.color} text-white`
+                          : 'bg-gray-100 text-gray-700'
+                      }`}
+                    >
+                      {category.name}
+                      {category.id !== 'all' && photos.filter(p => p.category === category.id).length > 0 && (
+                        <span className="ml-2 bg-white bg-opacity-30 px-2 py-0.5 rounded-full text-xs">
+                          {photos.filter(p => p.category === category.id).length}
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Photo Grid */}
+              <div className="flex-1 overflow-y-auto bg-gray-100">
+                {filteredPhotos.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-full text-center px-8">
+                    <Camera className="w-20 h-20 text-gray-300 mb-4" />
+                    <p className="text-gray-500 text-lg font-medium mb-2">No photos yet</p>
+                    <p className="text-gray-400 text-sm">Tap the camera button to capture your first patient photo</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-3 gap-1 p-1">
+                    {filteredPhotos.map(photo => (
+                      <div
+                        key={photo.id}
+                        onClick={() => setSelectedPhoto(photo)}
+                        className="aspect-square bg-gray-200 relative"
+                      >
+                        <img
+                          src={photo.imageUrl}
+                          alt={`Patient ${photo.patientId}`}
+                          className="w-full h-full object-cover"
+                        />
+                        <div className="absolute top-1 right-1">
+                          <div className={`${getCategoryInfo(photo.category).color} w-2 h-2 rounded-full`}></div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Bottom Tab Bar */}
+              <div className="bg-white border-t border-gray-200 px-6 py-2 pb-6">
+                <div className="flex items-center justify-around">
+                  <button
+                    onClick={() => setCurrentView('grid')}
+                    className={`flex flex-col items-center gap-1 ${currentView === 'grid' ? 'text-blue-500' : 'text-gray-500'}`}
+                  >
+                    <Grid3x3 className="w-6 h-6" />
+                    <span className="text-xs">Photos</span>
+                  </button>
+                  
+                  <button
+                    onClick={openCamera}
+                    className="bg-blue-500 text-white p-4 rounded-full -mt-8 shadow-lg"
+                  >
+                    <Camera className="w-8 h-8" />
+                  </button>
+                  
+                  <button
+                    onClick={() => setCurrentView('search')}
+                    className={`flex flex-col items-center gap-1 ${currentView === 'search' ? 'text-blue-500' : 'text-gray-500'}`}
+                  >
+                    <Search className="w-6 h-6" />
+                    <span className="text-xs">Search</span>
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      );
+    };
+
+    ReactDOM.render(<MedicalPhotoOrganizer />, document.getElementById('root'));
+  </script>
+</body>
+</html>
